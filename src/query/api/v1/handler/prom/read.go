@@ -40,12 +40,18 @@ import (
 	"go.uber.org/zap"
 )
 
+type RequestParser func(
+	ctx context.Context,
+	r *http.Request,
+) (native.ParsedOptions, error)
+
 type readHandler struct {
-	engine    *promql.Engine
-	queryable promstorage.Queryable
-	hOpts     options.HandlerOptions
-	scope     tally.Scope
-	logger    *zap.Logger
+	requestParser RequestParser
+	engine        *promql.Engine
+	queryable     promstorage.Queryable
+	hOpts         options.HandlerOptions
+	scope         tally.Scope
+	logger        *zap.Logger
 }
 
 type readRequest struct {
@@ -55,6 +61,7 @@ type readRequest struct {
 }
 
 func newReadHandler(
+	requestParser RequestParser,
 	opts Options,
 	hOpts options.HandlerOptions,
 	queryable promstorage.Queryable,
@@ -63,11 +70,12 @@ func newReadHandler(
 		map[string]string{"handler": "prometheus-read"},
 	)
 	return &readHandler{
-		engine:    opts.PromQLEngine,
-		queryable: queryable,
-		hOpts:     hOpts,
-		scope:     scope,
-		logger:    hOpts.InstrumentOpts().Logger(),
+		requestParser: requestParser,
+		engine:        opts.PromQLEngine,
+		queryable:     queryable,
+		hOpts:         hOpts,
+		scope:         scope,
+		logger:        hOpts.InstrumentOpts().Logger(),
 	}
 }
 
@@ -80,7 +88,7 @@ func (h *readHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	request, err := native.ParseRequest(ctx, r, false, h.hOpts)
+	request, err := h.requestParser(ctx, r)
 	if err != nil {
 		respondError(w, err)
 		return
