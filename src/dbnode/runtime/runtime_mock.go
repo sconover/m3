@@ -436,6 +436,34 @@ func (mr *MockOptionsMockRecorder) IndexDefaultQueryTimeout() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IndexDefaultQueryTimeout", reflect.TypeOf((*MockOptions)(nil).IndexDefaultQueryTimeout))
 }
 
+// SetTickCancellationCheckInterval mocks base method
+func (m *MockOptions) SetTickCancellationCheckInterval(value time.Duration) Options {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTickCancellationCheckInterval", value)
+	ret0, _ := ret[0].(Options)
+	return ret0
+}
+
+// SetTickCancellationCheckInterval indicates an expected call of SetTickCancellationCheckInterval
+func (mr *MockOptionsMockRecorder) SetTickCancellationCheckInterval(value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTickCancellationCheckInterval", reflect.TypeOf((*MockOptions)(nil).SetTickCancellationCheckInterval), value)
+}
+
+// TickCancellationCheckInterval mocks base method
+func (m *MockOptions) TickCancellationCheckInterval() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TickCancellationCheckInterval")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// TickCancellationCheckInterval indicates an expected call of TickCancellationCheckInterval
+func (mr *MockOptionsMockRecorder) TickCancellationCheckInterval() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TickCancellationCheckInterval", reflect.TypeOf((*MockOptions)(nil).TickCancellationCheckInterval))
+}
+
 // MockOptionsManager is a mock of OptionsManager interface
 type MockOptionsManager struct {
 	ctrl     *gomock.Controller

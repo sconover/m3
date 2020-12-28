@@ -182,6 +182,14 @@ type Options interface {
 	// IndexDefaultQueryTimeout is the hard timeout value to use if none is
 	// specified for a specific query, zero specifies to use no timeout at all.
 	IndexDefaultQueryTimeout() time.Duration
+
+	// SetTickCancellationCheckInterval sets the interval to check whether the tick
+	// has been cancelled. This duration also affects the minimum tick duration.
+	SetTickCancellationCheckInterval(value time.Duration) Options
+
+	// TickCancellationCheckInterval is the interval to check whether the tick
+	// has been cancelled. This duration also affects the minimum tick duration.
+	TickCancellationCheckInterval() time.Duration
 }
 
 // OptionsManager updates and supplies runtime options.
