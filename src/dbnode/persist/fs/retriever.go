@@ -466,7 +466,7 @@ func (r *blockRetriever) fetchBatch(
 	tagDecoderPool := r.fsOpts.TagDecoderPool()
 
 	blockCachingEnabled := r.opts.CacheBlocksOnRetrieve() && r.nsCacheBlocksOnRetrieve
-	//HERE false, false
+
 	// Seek and execute all requests
 	for _, req := range reqs {
 		// Should always be a data request by this point.
@@ -650,6 +650,7 @@ func (r *blockRetriever) Stream(
 		req.success = true
 		req.onDone()
 	}
+
 	// The request may not have completed yet, but it has an internal
 	// waitgroup which the caller will have to wait for before retrieving
 	// the data. This means that even though we're returning nil for error

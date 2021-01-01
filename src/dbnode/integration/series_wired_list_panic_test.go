@@ -23,7 +23,6 @@
 package integration
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -38,25 +37,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Make series close
-// - done when expired
-// - see TestPurgeExpiredSeriesEmptySeries
-// need to make the series written to disk
-// - series will only close if no more "active" blocks. Block considered active
-//   if series is in bucketMap in buffer - this is only removed when flushed to disk (I think?)
-
-// Concurrently, purge it from wiredlist
-// - done when removed from LRU cache
-// - see TestWiredListInsertsAndUpdatesWiredBlocks
+var (
+	nsID       = ident.StringID("ns0")
+	seriesStrs = []string{"series0", "series1"}
+)
 
 func TestWiredListPanic(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow() // Just skip if we're doing a short run.
 	}
 
+	// Small increment to make race condition more likely.
 	tickInterval := 10 * time.Millisecond
 
-	nsID := ident.StringID("ns0")
 	nsOpts := namespace.NewOptions().
 		SetRepairEnabled(false).
 		SetRetentionOptions(DefaultIntegrationTestRetentionOpts).
@@ -64,10 +57,12 @@ func TestWiredListPanic(t *testing.T) {
 	ns, err := namespace.NewMetadata(nsID, nsOpts)
 	require.NoError(t, err)
 	testOpts := NewTestOptions(t).
-		// Smallest increment to make race condition more likely.
 		SetTickMinimumInterval(tickInterval).
 		SetTickCancellationCheckInterval(10 * time.Millisecond).
 		SetNamespaces([]namespace.Metadata{ns}).
+		// Wired list size of one means that if we query for two different IDs
+		// alternating between each one, we'll evict from the wired list on
+		// every query.
 		SetMaxWiredBlocks(1)
 
 	testSetup, err := NewTestSetup(t, testOpts, nil,
@@ -97,20 +92,18 @@ func TestWiredListPanic(t *testing.T) {
 
 	start := testSetup.NowFn()()
 	for i := 0; i < 1; i++ {
-		write(t, testSetup, nsID, blockSize, start, filePathPrefix, i)
-		time.Sleep(50 * time.Millisecond)
+		write(t, testSetup, blockSize, start, filePathPrefix, i)
+		time.Sleep(10 * time.Millisecond)
 	}
 
-	read(t, testSetup, nsID, blockSize, start)
+	read(t, testSetup, blockSize)
 
-	fmt.Printf("j>> %+v\n", "END SLEEP")
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 }
 
 func write(
 	t *testing.T,
 	testSetup TestSetup,
-	nsID ident.ID,
 	blockSize time.Duration,
 	start time.Time,
 	filePathPrefix string,
@@ -120,7 +113,7 @@ func write(
 	testSetup.SetNowFn(blockStart)
 
 	input := generate.BlockConfig{
-		IDs: []string{"series0", "series1"}, NumPoints: 1, Start: blockStart,
+		IDs: seriesStrs, NumPoints: 1, Start: blockStart,
 	}
 	testData := generate.Block(input)
 	require.NoError(t, testSetup.WriteBatch(nsID, testData))
@@ -136,34 +129,32 @@ func write(
 				VolumeIndex: 0,
 			},
 		},
-		time.Minute,
+		time.Second,
 	))
 }
 
 func read(
 	t *testing.T,
 	testSetup TestSetup,
-	nsID ident.ID,
 	blockSize time.Duration,
-	start time.Time,
 ) {
-	var (
-		err error
-		req = rpc.NewFetchRequest()
-	)
+	// After every write, "now" would be progressed into the future so that the
+	// will be flushed to disk. This makes "now" a suitable RangeEnd for the
+	// fetch request. The precise range does not matter so long as it overlaps
+	// with the current retention.
+	now := testSetup.NowFn()()
 
+	req := rpc.NewFetchRequest()
 	req.NameSpace = nsID.String()
-	req.RangeStart = xtime.ToNormalizedTime(start, time.Second)
-	req.RangeEnd = xtime.ToNormalizedTime(start.Add(blockSize), time.Second)
+	req.RangeStart = xtime.ToNormalizedTime(now.Add(-4*blockSize), time.Second)
+	req.RangeEnd = xtime.ToNormalizedTime(now, time.Second)
 	req.ResultTimeType = rpc.TimeType_UNIX_SECONDS
 
-	for i := 0; i < 10; i++ {
-		req.ID = "series0"
-		_, err = testSetup.Fetch(req)
-		require.NoError(t, err)
-
-		req.ID = "series1"
-		_, err = testSetup.Fetch(req)
+	// Fetching the series sequentially ensures that the wired list will have
+	// evictions assuming that the list is configured with a size of 1.
+	for _, seriesStr := range seriesStrs {
+		req.ID = seriesStr
+		_, err := testSetup.Fetch(req)
 		require.NoError(t, err)
 	}
 }

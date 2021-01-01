@@ -51,7 +51,6 @@ package block
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -331,7 +330,7 @@ func (l *WiredList) insertAfter(v, at DatabaseBlock) {
 				).Error("wired list tried to close a block that was not from disk")
 			})
 		}
-		fmt.Println("j>> EVICTED")
+
 		l.metrics.evicted.Inc(1)
 
 		enteredListAt := time.Unix(0, bl.enteredListAtUnixNano())
