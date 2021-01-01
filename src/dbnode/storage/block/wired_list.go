@@ -51,6 +51,7 @@ package block
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -271,7 +272,7 @@ func (l *WiredList) insertAfter(v, at DatabaseBlock) {
 	v.setNext(n)
 	n.setPrev(v)
 	l.length++
-
+	//HERE
 	maxWired := int(atomic.LoadInt64(&l.maxWired))
 	if maxWired <= 0 {
 		// Not enforcing max wired blocks
@@ -330,7 +331,7 @@ func (l *WiredList) insertAfter(v, at DatabaseBlock) {
 				).Error("wired list tried to close a block that was not from disk")
 			})
 		}
-
+		fmt.Println("j>> EVICTED")
 		l.metrics.evicted.Inc(1)
 
 		enteredListAt := time.Unix(0, bl.enteredListAtUnixNano())

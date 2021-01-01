@@ -680,7 +680,6 @@ func (n *dbNamespace) Write(
 	unit xtime.Unit,
 	annotation []byte,
 ) (SeriesWrite, error) {
-	fmt.Printf("j>> %+v\n", "ns write")
 	if n.ReadOnly() {
 		return SeriesWrite{}, errNamespaceReadOnly
 	}

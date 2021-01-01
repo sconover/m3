@@ -27,7 +27,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m3db/m3/src/dbnode/generated/thrift/rpc"
+	"github.com/m3db/m3/src/dbnode/integration/generate"
 	"github.com/m3db/m3/src/dbnode/namespace"
+	"github.com/m3db/m3/src/dbnode/persist/fs"
 	"github.com/m3db/m3/src/dbnode/storage"
 	"github.com/m3db/m3/src/x/ident"
 	xtime "github.com/m3db/m3/src/x/time"
@@ -38,6 +41,9 @@ import (
 // Make series close
 // - done when expired
 // - see TestPurgeExpiredSeriesEmptySeries
+// need to make the series written to disk
+// - series will only close if no more "active" blocks. Block considered active
+//   if series is in bucketMap in buffer - this is only removed when flushed to disk (I think?)
 
 // Concurrently, purge it from wiredlist
 // - done when removed from LRU cache
@@ -48,19 +54,21 @@ func TestWiredListPanic(t *testing.T) {
 		t.SkipNow() // Just skip if we're doing a short run.
 	}
 
+	tickInterval := 10 * time.Millisecond
+
 	nsID := ident.StringID("ns0")
 	nsOpts := namespace.NewOptions().
 		SetRepairEnabled(false).
-		SetRetentionOptions(DefaultIntegrationTestRetentionOpts)
+		SetRetentionOptions(DefaultIntegrationTestRetentionOpts).
+		SetCacheBlocksOnRetrieve(true)
 	ns, err := namespace.NewMetadata(nsID, nsOpts)
 	require.NoError(t, err)
 	testOpts := NewTestOptions(t).
 		// Smallest increment to make race condition more likely.
-		SetTickMinimumInterval(10 * time.Millisecond).
+		SetTickMinimumInterval(tickInterval).
 		SetTickCancellationCheckInterval(10 * time.Millisecond).
 		SetNamespaces([]namespace.Metadata{ns}).
-		SetMaxWiredBlocks(1).
-		SetNowFn(time.Now)
+		SetMaxWiredBlocks(1)
 
 	testSetup, err := NewTestSetup(t, testOpts, nil,
 		func(opt storage.Options) storage.Options {
@@ -82,18 +90,80 @@ func TestWiredListPanic(t *testing.T) {
 		log.Info("server is now down")
 	}()
 
-	cli := testSetup.M3DBClient()
-	session, err := cli.DefaultSession()
-	require.NoError(t, err)
+	md := testSetup.NamespaceMetadataOrFail(nsID)
+	ropts := md.Options().RetentionOptions()
+	blockSize := ropts.BlockSize()
+	filePathPrefix := testSetup.StorageOpts().CommitLogOptions().FilesystemOptions().FilePathPrefix()
 
-	series0 := ident.StringID("series-0")
-	session.Write(nsID, series0, time.Now(), 123, xtime.Second, nil)
+	start := testSetup.NowFn()()
+	for i := 0; i < 1; i++ {
+		write(t, testSetup, nsID, blockSize, start, filePathPrefix, i)
+		time.Sleep(50 * time.Millisecond)
+	}
 
-	fmt.Printf("j>> %+v\n", "sleeping")
+	read(t, testSetup, nsID, blockSize, start)
+
+	fmt.Printf("j>> %+v\n", "END SLEEP")
 	time.Sleep(10 * time.Second)
+}
 
-	//HERE now it ticks quickly.
-	// Make the tick close the series
-	// Somehow concurrently evict from wiredlist
-	// - Many alternating reads?
+func write(
+	t *testing.T,
+	testSetup TestSetup,
+	nsID ident.ID,
+	blockSize time.Duration,
+	start time.Time,
+	filePathPrefix string,
+	i int,
+) {
+	blockStart := start.Add(time.Duration(2*i) * blockSize)
+	testSetup.SetNowFn(blockStart)
+
+	input := generate.BlockConfig{
+		IDs: []string{"series0", "series1"}, NumPoints: 1, Start: blockStart,
+	}
+	testData := generate.Block(input)
+	require.NoError(t, testSetup.WriteBatch(nsID, testData))
+
+	testSetup.SetNowFn(blockStart.Add(blockSize * 3 / 2))
+	require.NoError(t, waitUntilFileSetFilesExist(
+		filePathPrefix,
+		[]fs.FileSetFileIdentifier{
+			{
+				Namespace:   nsID,
+				Shard:       1,
+				BlockStart:  blockStart,
+				VolumeIndex: 0,
+			},
+		},
+		time.Minute,
+	))
+}
+
+func read(
+	t *testing.T,
+	testSetup TestSetup,
+	nsID ident.ID,
+	blockSize time.Duration,
+	start time.Time,
+) {
+	var (
+		err error
+		req = rpc.NewFetchRequest()
+	)
+
+	req.NameSpace = nsID.String()
+	req.RangeStart = xtime.ToNormalizedTime(start, time.Second)
+	req.RangeEnd = xtime.ToNormalizedTime(start.Add(blockSize), time.Second)
+	req.ResultTimeType = rpc.TimeType_UNIX_SECONDS
+
+	for i := 0; i < 10; i++ {
+		req.ID = "series0"
+		_, err = testSetup.Fetch(req)
+		require.NoError(t, err)
+
+		req.ID = "series1"
+		_, err = testSetup.Fetch(req)
+		require.NoError(t, err)
+	}
 }

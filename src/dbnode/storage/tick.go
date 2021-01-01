@@ -22,7 +22,6 @@ package storage
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -127,7 +126,6 @@ func (mgr *tickManager) SetRuntimeOptions(opts runtime.Options) {
 }
 
 func (mgr *tickManager) Tick(forceType forceType, startTime time.Time) error {
-	fmt.Printf("j>> %+v\n", "ticking...")
 	if forceType == force {
 		acquired := false
 		waiter := time.NewTicker(tokenCheckInterval)
