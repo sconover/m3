@@ -271,7 +271,7 @@ func (l *WiredList) insertAfter(v, at DatabaseBlock) {
 	v.setNext(n)
 	n.setPrev(v)
 	l.length++
-	//HERE
+
 	maxWired := int(atomic.LoadInt64(&l.maxWired))
 	if maxWired <= 0 {
 		// Not enforcing max wired blocks

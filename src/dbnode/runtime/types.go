@@ -184,11 +184,11 @@ type Options interface {
 	IndexDefaultQueryTimeout() time.Duration
 
 	// SetTickCancellationCheckInterval sets the interval to check whether the tick
-	// has been cancelled. This duration also affects the minimum tick duration.
+	// has been canceled. This duration also affects the minimum tick duration.
 	SetTickCancellationCheckInterval(value time.Duration) Options
 
 	// TickCancellationCheckInterval is the interval to check whether the tick
-	// has been cancelled. This duration also affects the minimum tick duration.
+	// has been canceled. This duration also affects the minimum tick duration.
 	TickCancellationCheckInterval() time.Duration
 }
 
