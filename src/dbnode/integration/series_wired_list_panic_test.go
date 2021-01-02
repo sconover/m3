@@ -1,6 +1,6 @@
 // +build integration
 
-// Copyright (c) 2020 Uber Technologies, Inc.
+// Copyright (c) 2021 Uber Technologies, Inc.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ func TestWiredListPanic(t *testing.T) {
 	}
 
 	// Small increment to make race condition more likely.
-	tickInterval := 10 * time.Millisecond
+	tickInterval := 5 * time.Millisecond
 
 	nsOpts := namespace.NewOptions().
 		SetRepairEnabled(false).
@@ -58,7 +58,7 @@ func TestWiredListPanic(t *testing.T) {
 	require.NoError(t, err)
 	testOpts := NewTestOptions(t).
 		SetTickMinimumInterval(tickInterval).
-		SetTickCancellationCheckInterval(10 * time.Millisecond).
+		SetTickCancellationCheckInterval(tickInterval).
 		SetNamespaces([]namespace.Metadata{ns}).
 		// Wired list size of one means that if we query for two different IDs
 		// alternating between each one, we'll evict from the wired list on
@@ -67,7 +67,7 @@ func TestWiredListPanic(t *testing.T) {
 
 	testSetup, err := NewTestSetup(t, testOpts, nil,
 		func(opt storage.Options) storage.Options {
-			return opt.SetMediatorTickInterval(10 * time.Millisecond)
+			return opt.SetMediatorTickInterval(tickInterval)
 		},
 	)
 
@@ -91,14 +91,29 @@ func TestWiredListPanic(t *testing.T) {
 	filePathPrefix := testSetup.StorageOpts().CommitLogOptions().FilesystemOptions().FilePathPrefix()
 
 	start := testSetup.NowFn()()
-	for i := 0; i < 1; i++ {
-		write(t, testSetup, blockSize, start, filePathPrefix, i)
-		time.Sleep(10 * time.Millisecond)
-	}
+	go func() {
+		for i := 0; true; i++ {
+			write(t, testSetup, blockSize, start, filePathPrefix, i)
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
 
-	read(t, testSetup, blockSize)
+	doneCh := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-doneCh:
+				return
+			default:
+				read(t, testSetup, blockSize)
+				time.Sleep(200 * time.Millisecond)
+			}
+		}
+	}()
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(30 * time.Second)
+	// Stop reads before tearing down testSetup.
+	doneCh <- struct{}{}
 }
 
 func write(
@@ -118,6 +133,9 @@ func write(
 	testData := generate.Block(input)
 	require.NoError(t, testSetup.WriteBatch(nsID, testData))
 
+	// Progress well past the block boundary so that the series gets flushed to
+	// disk. This allows the next tick to purge the series from memory, closing
+	// the series and thus making the id nil.
 	testSetup.SetNowFn(blockStart.Add(blockSize * 3 / 2))
 	require.NoError(t, waitUntilFileSetFilesExist(
 		filePathPrefix,
