@@ -91,7 +91,11 @@ type newFieldsAndTermsIteratorFn func(
 	ctx context.Context, r segment.Reader, opts fieldsAndTermsIteratorOpts,
 ) (fieldsAndTermsIterator, error)
 
-func newFieldsAndTermsIterator(ctx context.Context, reader segment.Reader, opts fieldsAndTermsIteratorOpts) (fieldsAndTermsIterator, error) {
+func newFieldsAndTermsIterator(
+	ctx context.Context,
+	reader segment.Reader,
+	opts fieldsAndTermsIteratorOpts,
+) (fieldsAndTermsIterator, error) {
 	iter := &fieldsAndTermsIter{}
 	err := iter.Reset(ctx, reader, opts)
 	if err != nil {
@@ -100,7 +104,11 @@ func newFieldsAndTermsIterator(ctx context.Context, reader segment.Reader, opts 
 	return iter, nil
 }
 
-func (fti *fieldsAndTermsIter) Reset(ctx context.Context, reader segment.Reader, opts fieldsAndTermsIteratorOpts) error {
+func (fti *fieldsAndTermsIter) Reset(
+	ctx context.Context,
+	reader segment.Reader,
+	opts fieldsAndTermsIteratorOpts,
+) error {
 	*fti = fieldsAndTermsIterZeroed
 	fti.reader = reader
 	fti.opts = opts
@@ -125,7 +133,7 @@ func (fti *fieldsAndTermsIter) Reset(ctx context.Context, reader segment.Reader,
 		return err
 	}
 
-	ctx, sp := ctx.StartTraceSpan(tracepoint.FieldTermsIteratorIndexSearch)
+	_, sp := ctx.StartTraceSpan(tracepoint.FieldTermsIteratorIndexSearch)
 	pl, err := searcher.Search(fti.reader)
 	sp.Finish()
 	if err != nil {

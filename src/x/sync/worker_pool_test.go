@@ -21,11 +21,13 @@
 package sync
 
 import (
-	"context"
+	stdctx "context"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/m3db/m3/src/x/context"
 
 	"github.com/stretchr/testify/require"
 )
@@ -124,8 +126,9 @@ func TestGoWithTimeout(t *testing.T) {
 }
 
 func TestGoWithCtx(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	goctx, cancel := stdctx.WithTimeout(stdctx.Background(), time.Second)
 	defer cancel()
+	ctx := context.NewWithGoContext(goctx)
 	wp := NewWorkerPool(1)
 	wp.Init()
 

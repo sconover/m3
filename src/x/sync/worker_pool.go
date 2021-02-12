@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/m3db/m3/src/dbnode/tracepoint"
-
 	"github.com/m3db/m3/src/x/context"
 )
 
